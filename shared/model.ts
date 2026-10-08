@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Decimal } from 'decimal.js';
 
 export const providers = [
+  { id: 'claude-code', name: 'Claude Code', category: 'Coding assistant', mark: 'C', color: '#b76749', url: 'https://claude.ai/settings/usage' },
   { id: 'codex', name: 'Codex', category: 'Coding assistant', mark: '⌘', color: '#252a33', url: 'https://chatgpt.com/codex' },
   { id: 'claude', name: 'Claude', category: 'Chat & reasoning', mark: '✳', color: '#b76749', url: 'https://claude.ai/settings/usage' },
   { id: 'chatgpt', name: 'ChatGPT', category: 'Chat & reasoning', mark: '◉', color: '#16846c', url: 'https://chatgpt.com' },
@@ -22,7 +23,7 @@ export const providers = [
 ] as const;
 export type ProviderId = typeof providers[number]['id'];
 export const providerFor = (id: string) => providers.find(p => p.id === id) ?? providers[providers.length - 1];
-export const supportsAuto = (id: string) => id === 'codex' || !!keyIntegration(id);
+export const supportsAuto = (id: string) => id === 'codex' || id === 'claude-code' || !!keyIntegration(id);
 
 const decimal = z.string().regex(/^-?\d{1,20}(\.\d{1,12})?$/, 'Enter a decimal number (up to 12 decimal places).');
 const nonnegative = decimal.refine(v => new Decimal(v).gte(0), 'Must be zero or greater.');
@@ -77,7 +78,7 @@ export type Source = SourceInput & {
   lastAttempt: string | null; lastSuccess: string | null;
   error: string | null; failures: number; nextAttempt: number; authPaused: boolean;
 };
-export type State = { sources: Source[]; serverTime: string; version: string; demo: boolean };
+export type State = { sources: Source[]; serverTime: string; version: string; demo: boolean; runningSources?: string[]; queuedSources?: string[] };
 export const manualSchema = z.object({
   revision: z.number().int().positive(),
   metrics: z.array(metricSchema).max(20)
@@ -112,6 +113,14 @@ export function countdown(at: string, now = Date.now()) {
   if (!seconds) return 'Reset due';
   const d = Math.floor(seconds / 86400), h = Math.floor(seconds % 86400 / 3600), m = Math.floor(seconds % 3600 / 60);
   return d ? d + 'd ' + h + 'h' : h ? h + 'h ' + m + 'm' : m ? m + 'm ' + seconds % 60 + 's' : seconds + 's';
+}
+// Accepts "3h 12m", "2d 5h", "45m", "30s". Returns milliseconds, or null when blank.
+export function parseDuration(text: string) {
+  const value = text.trim().toLowerCase();
+  if (!value) return null;
+  const parts = [...value.matchAll(/(\d+(?:\.\d+)?)\s*(d|h|m|s)/g)];
+  if (!parts.length || value.replace(/(\d+(?:\.\d+)?)\s*(d|h|m|s)[a-z]*/g, '').trim()) throw new Error('Write the reset as e.g. 3h 12m or 2d 5h.');
+  return parts.reduce((total, [, amount, unit]) => total + Number(amount) * { d: 86400000, h: 3600000, m: 60000, s: 1000 }[unit as 'd']!, 0);
 }
 export function age(at: string | null, now = Date.now()) {
   if (!at) return 'Not checked';

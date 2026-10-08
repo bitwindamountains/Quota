@@ -1,5 +1,5 @@
 import { keyIntegration, minimumPoll, environmentPattern, manualReason } from '../../shared/integrations';
-import { useEffect, useRef, useState, type ReactNode, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode, type FormEvent } from 'react';
 import { X, Plus, ArrowRight, Trash2 } from 'lucide-react';
 import { Decimal } from 'decimal.js';
 import { providers, providerFor, supportsAuto, metricSchema, type Source, type SourceInput, type Metric } from '../../shared/model';
@@ -7,20 +7,25 @@ import { api } from './api';
 
 export function Modal({ title, subtitle, children, close }: { title: string; subtitle?: string; children: ReactNode; close: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { const el = ref.current!; const previous = document.activeElement as HTMLElement; el.showModal(); return () => { el.close(); previous?.focus(); }; }, []);
-  return <dialog ref={ref} className="modal" onCancel={e => { e.preventDefault(); close(); }}>
-    <div className="modal-head"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button className="icon-button" onClick={close} aria-label="Close dialog"><X size={20}/></button></div>
+  const titleId = useId(), subtitleId = useId();
+  useEffect(() => { const el = ref.current!; const previous = document.activeElement as HTMLElement; el.showModal(); el.querySelector<HTMLElement>('h2')?.focus(); return () => { el.close(); previous?.focus(); }; }, []);
+  return <dialog ref={ref} className="modal" aria-labelledby={titleId} aria-describedby={subtitle ? subtitleId : undefined} onCancel={e => { e.preventDefault(); close(); }}>
+    <div className="modal-head"><div><h2 id={titleId} tabIndex={-1}>{title}</h2>{subtitle && <p id={subtitleId}>{subtitle}</p>}</div><button className="icon-button" onClick={close} aria-label="Close dialog"><X size={20}/></button></div>
     {children}
   </dialog>;
 }
 export function SourceForm({ source: initialSource, close, saved }: { source?: Source; close: () => void; saved: () => Promise<void> }) {
+  const formId = useId();
   const [source, setSource] = useState(initialSource);
   const [revision, setRevision] = useState(source?.revision ?? 1);
   const [credentialBusy, setCredentialBusy] = useState(false);
   const [provider, setProvider] = useState(source?.provider ?? 'codex');
   const [name, setName] = useState(source?.name ?? 'Codex');
   const [scope, setScope] = useState(source?.scope ?? 'Personal');
-  const [mode, setMode] = useState<SourceInput['mode']>(source?.mode ?? 'manual');
+  const [mode, setMode] = useState<SourceInput['mode']>(source?.mode ?? 'automatic');
+  const [connections, setConnections] = useState<Record<string, string[]>>({});
+  const [environment, setEnvironment] = useState('');
+  useEffect(() => { let live = true; void api<Record<string, string[]>>('/connections').then(value => { if (live) setConnections(value); }).catch(() => {}); return () => { live = false; }; }, []);
   const [poll, setPoll] = useState((source?.pollSeconds ?? 300) / 60);
   const [enabled, setEnabled] = useState(source?.enabled ?? true);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false);
@@ -30,16 +35,24 @@ export function SourceForm({ source: initialSource, close, saved }: { source?: S
       const data = { provider, name, scope, mode, pollSeconds: Math.max(minimumPoll(provider), poll * 60), enabled };
       if (source) await api('/sources/' + source.id, 'PATCH', { revision, source: data });
       else {
-        const created = await api<Source>('/sources', 'POST', data);
-        if (keyIntegration(provider)) { setSource(created); setRevision(created.revision); await saved(); return; }
+        const needsCredential = !!keyIntegration(provider);
+        const created = await api<Source>('/sources', 'POST', { ...data, mode: needsCredential ? 'manual' : mode });
+        if (needsCredential) {
+          setSource(created); setRevision(created.revision);
+          if (environment && mode === 'automatic') {
+            const credential = await api<{ revision: number }>('/sources/' + created.id + '/credential', 'PUT', { revision: created.revision, credential: { method: 'environment', variable: environment } });
+            setRevision(credential.revision);
+            await api('/sources/' + created.id, 'PATCH', { revision: credential.revision, source: data });
+          } else { await saved(); return; }
+        }
       }
       await saved(); close();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
   return <Modal title={source ? 'Source settings' : 'Add a source'} subtitle="Keep your tools in view, on your terms." close={close}>
-    <form onSubmit={e => void submit(e)} className="form">
-      <label>AI tool<select value={provider} disabled={!!source} onChange={e => { const id = e.target.value as Source['provider']; setProvider(id); setName(providerFor(id).name); setMode('manual'); setPoll(minimumPoll(id) / 60); }}>
-        {providers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+    <form id={formId} onSubmit={e => void submit(e)} className="form source-settings-form">
+      <label>AI tool<select value={provider} disabled={!!source} onChange={e => { const id = e.target.value as Source['provider']; setProvider(id); setName(providerFor(id).name); setMode(supportsAuto(id) ? 'automatic' : 'manual'); setEnvironment(''); setPoll(minimumPoll(id) / 60); }}>
+        {providers.map(p => <option key={p.id} value={p.id}>{p.name}{supportsAuto(p.id) ? ' (automatic available)' : ' (manual)'}</option>)}</select></label>
       <div className="form-row"><label>Display name<input value={name} onChange={e => setName(e.target.value)} maxLength={60} required /></label>
         <label>Account or scope<input value={scope} disabled={!!source} onChange={e => setScope(e.target.value)} maxLength={80} required placeholder="Personal" /></label></div>
       <fieldset className="mode-options"><legend>How to track</legend>
@@ -47,15 +60,19 @@ export function SourceForm({ source: initialSource, close, saved }: { source?: S
         <label className={mode === 'automatic' ? 'selected' : ''}><input type="radio" name="mode" checked={mode === 'automatic'} disabled={!supportsAuto(provider)} onChange={() => { setMode('automatic'); setPoll(value => Math.max(value, minimumPoll(provider) / 60)); }}/><span><strong>Automatic</strong><small>{supportsAuto(provider) ? 'Read-only, refreshed locally.' : 'Not available for this tool yet.'}</small></span></label>
       </fieldset>
       {(supportsAuto(provider) || mode === 'automatic') && <div className="form-note">{provider === 'codex' ? 'Uses your installed Codex CLI and its existing ChatGPT sign-in. The CLI owns authentication; no prompts or generation requests are sent.' : keyIntegration(provider)?.description}</div>}
+      {provider === 'codex' && <CodexDetection/>}
+      {provider === 'claude-code' && <p className="form-note">Reads 5-hour and weekly windows reported by Claude Code v2.1.251+ with a Pro or Max subscription, after an API response. Updates while you use Claude Code; checked at the interval below. Only one local account is supported. See <code>docs/dynamic-collection.md</code>.</p>}
+      {provider === 'claude-code' && <ClaudeBridge automatic={mode === 'automatic' && enabled}/>}
+      {!source && mode === 'automatic' && keyIntegration(provider) && <label>Use a configured server credential<select value={environment} onChange={e => setEnvironment(e.target.value)}><option value="">Set up a credential after adding</option>{(connections[provider] ?? []).map(variable => <option key={variable} value={variable}>{variable}</option>)}</select><small>Only variable names are shown. Selecting one enables automatic collection when you add this source. A detected key still needs the reporting permissions described above.</small></label>}
       {!supportsAuto(provider) && <p className="form-note">{manualReason(provider)}</p>}
       {!initialSource && source && <p role="status" className="form-note">Source added. Configure its credential below, then choose Automatic when ready.</p>}
       {provider === 'cline' && <div className="form-note">For BYOK, track the upstream provider instead. Use this card for Cline-managed credits or a subscription.</div>}
       {mode === 'automatic' && <label>Refresh interval (minutes)<input type="number" min={minimumPoll(provider) / 60} max={1440} value={poll} onChange={e => setPoll(Number(e.target.value))} required /></label>}
       {source && <label className="check"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)}/> Show and refresh this source</label>}
       {error && <p className="error" role="alert">{error}</p>}
-      <div className="modal-actions"><button type="button" className="button secondary" onClick={close}>Cancel</button><button className="button primary" disabled={busy || credentialBusy}>{busy ? 'Saving…' : source ? 'Save changes' : 'Add source'}<ArrowRight size={16}/></button></div>
     </form>
     {source && keyIntegration(source.provider) && <CredentialForm source={source} revision={revision} changed={setRevision} busyChanged={setCredentialBusy} parentBusy={busy} />}
+    <div className="source-form-actions"><p>{source && keyIntegration(source.provider) ? 'Save credentials above, then save source settings here.' : 'Saved on this computer.'}</p><div className="modal-actions"><button type="button" className="button secondary" onClick={close}>Cancel</button><button form={formId} className="button primary" disabled={busy || credentialBusy}>{busy ? 'Saving…' : source ? 'Save changes' : 'Add source'}<ArrowRight size={16}/></button></div></div>
   </Modal>;
 }
 
@@ -63,6 +80,8 @@ type CredentialStatus = { method: 'protected' | 'environment' | 'none'; variable
 function CredentialForm({ source, revision, changed, busyChanged, parentBusy }: { parentBusy: boolean; source: Source; revision: number; changed: (revision: number) => void; busyChanged: (busy: boolean) => void }) {
   const integration = keyIntegration(source.provider)!;
   const [status, setStatus] = useState<CredentialStatus>();
+  const [available, setAvailable] = useState<string[]>([]);
+  useEffect(() => { let live = true; void api<Record<string, string[]>>('/connections').then(value => { if (live) setAvailable(value[source.provider] ?? []); }).catch(() => {}); return () => { live = false; }; }, [source.provider]);
   const [method, setMethod] = useState<CredentialStatus['method']>('environment');
   const [variable, setVariable] = useState<string>(integration.variable);
   const [key, setKey] = useState(''), [message, setMessage] = useState('');
@@ -85,7 +104,7 @@ function CredentialForm({ source, revision, changed, busyChanged, parentBusy }: 
     } catch (error) { setMessage((error as Error).message); }
     finally { setBusy(false); busyChanged(false); }
   }
-  return <form className="form" onSubmit={e => void save(e)}>
+  return <form className="form credential-form" onSubmit={e => void save(e)}>
     <h3>{integration.name} credential</h3>
     <p className="form-note">Required: {integration.credentialLabel}. <a href={integration.docs} target="_blank" rel="noreferrer">Provider documentation</a></p>
     <p className="form-note">{status ? (status.configured ? 'A credential is configured. Saved keys are never displayed.' : 'No credential is configured for the selected method.') : 'Loading credential settings...'}</p>
@@ -95,6 +114,7 @@ function CredentialForm({ source, revision, changed, busyChanged, parentBusy }: 
       <option value="none">Remove credential / disconnect</option>
     </select></label>
     {method === 'protected' && <label>New API key<input type="password" value={key} onChange={e => setKey(e.target.value)} autoComplete="new-password" spellCheck={false} minLength={10} maxLength={4096} required placeholder="Paste a key to save or replace" /></label>}
+    {method === 'environment' && available.length > 0 && <label>Detected server credentials<select value={available.includes(variable) ? variable : ''} onChange={e => { if (e.target.value) setVariable(e.target.value); }}><option value="">Choose a variable</option>{available.map(name => <option key={name} value={name}>{name}</option>)}</select></label>}
     {method === 'environment' && <label>Environment variable name<input value={variable} onChange={e => setVariable(e.target.value)} required pattern={environmentPattern(source.provider)} maxLength={110} /></label>}
     <p className="form-note">Protected keys are encrypted for this Windows user. Environment mode reads a server variable; changing .env requires a restart. Switching methods removes the previous protected key and never falls back to it. A different key needs a new source once readings have been collected.</p>
     {message && <p role="status">{message}</p>}
@@ -186,4 +206,30 @@ export function MetricForm({ source, close, saved }: { source: Source; close: ()
       <div className="modal-actions">{selected && <button type="button" className="button danger subtle" disabled={busy} onClick={() => void commit(source.metrics.filter(m => m.key !== selected))}><Trash2 size={15}/>Remove metric</button>}<button type="button" className="button secondary" onClick={close}>Cancel</button><button className="button primary" disabled={busy}>{busy ? 'Saving…' : 'Save reading'}</button></div>
     </form>
   </Modal>;
+}
+
+type BridgeStatus = { state: 'configured' | 'missing' | 'custom' | 'error'; settings: string; command?: string; message?: string };
+function ClaudeBridge({ automatic }: { automatic: boolean }) {
+  const [status, setStatus] = useState<BridgeStatus>();
+  useEffect(() => { let live = true; void api<BridgeStatus>('/claude-code/bridge').then(value => { if (live) setStatus(value); }).catch(() => {}); return () => { live = false; }; }, []);
+  if (!status) return null;
+  const text = status.state === 'configured' ? 'Connected: Claude Code reports usage to Quota through its status line.'
+    : status.state === 'custom' ? 'You already have a custom Claude Code status line, so Quota will not replace it. To connect, pass the same stdin JSON from your status-line script to:'
+    : status.state === 'error' ? (status.message ?? 'Claude Code settings could not be read.')
+    : automatic ? "Saving adds Quota's status line to " + status.settings + ' (the existing file is backed up first). Remove its statusLine entry to disconnect.'
+    : 'Choose Automatic to connect Claude Code when you save.';
+  return <div className="form-note" role="status"><p style={{ overflowWrap: 'anywhere' }}>{text}</p>{status.state === 'custom' && <code style={{ overflowWrap: 'anywhere' }}>{status.command}</code>}</div>;
+}
+function CodexDetection() {
+  const [status, setStatus] = useState('Automatically searches PATH and known installation folders. An explicit CODEX_EXECUTABLE setting takes priority.');
+  const [busy, setBusy] = useState(false);
+  async function detect() {
+    setBusy(true);
+    try {
+      const result = await api<{ detected: boolean; path?: string; version?: string; method?: string; message?: string }>('/codex/detect');
+      setStatus(result.detected ? 'Codex detected (' + result.version + ', ' + result.method + '): ' + result.path : result.message ?? 'Codex not detected.');
+    } catch { setStatus('Could not connect to the local server.'); }
+    finally { setBusy(false); }
+  }
+  return <div className="form-note"><p role="status" style={{ overflowWrap: 'anywhere' }}>{status}</p><button type="button" className="text-button" disabled={busy} onClick={() => void detect()}>{busy ? 'Detecting Codex...' : 'Detect Codex again'}</button></div>;
 }

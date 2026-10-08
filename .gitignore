@@ -15,3 +15,14 @@ playwright-report/
 
 # OS-protected credential blobs
 *.dpapi
+
+# Keep secrets and local files out of the public repo
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+.claude/settings.local.json
+.DS_Store
+Thumbs.db

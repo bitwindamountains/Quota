@@ -1,6 +1,6 @@
 {
   "name": "ai-usage-tracker",
-  "version": "1.3.0",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -8,13 +8,19 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json",
+    "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json && node scripts/finalize-pwa.mjs",
     "start": "node --env-file-if-exists=.env dist/server/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "backup": "node --env-file-if-exists=.env dist/server/backup.js"
+    "backup": "node --env-file-if-exists=.env dist/server/backup.js",
+    "local:start": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows.ps1 -Action Start",
+    "local:stop": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows.ps1 -Action Stop",
+    "local:shortcuts": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows.ps1 -Action Shortcuts",
+    "local:autostart": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows.ps1 -Action EnableStartup",
+    "local:no-autostart": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/windows.ps1 -Action DisableStartup",
+    "claude:setup": "node --env-file-if-exists=.env scripts/claude-setup.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.2",

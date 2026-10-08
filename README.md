@@ -18,6 +18,20 @@ Start with **Add source**, or **Explore the demo** to see synthetic readings. De
 
 The server binds only to IPv4 loopback. Keep it local; it is not a hosted or multi-user service. Stop a foreground server with Ctrl+C. Closing the browser tab does not stop it.
 
+## Install as a local app (v1.4)
+
+After building, run `npm.cmd run local:start` on Windows. In Edge or Chrome, open **http://127.0.0.1:4317**, select **Install app**, and complete the browser prompt. The backend still needs to run on your computer.
+
+Use `npm.cmd run local:shortcuts` for desktop Start/Stop shortcuts. Optional `npm.cmd run local:autostart` starts the backend at sign-in; `npm.cmd run local:no-autostart` removes it. `npm.cmd run local:stop` stops a launcher-owned instance. Start-at-login is opt-in.
+
+See [local PWA setup, offline behavior and Codex discovery](docs/local-pwa.md). The offline screen caches no usage or credentials. PWA installation does not turn this into a public hosted service.
+
+## Usability update (v1.5)
+
+The dashboard now has clearer text and controls, sorting by name/attention/next reset, provider-aware search, visible running checks, and a single bulk-refresh summary. Paused sources remain easy to recover. Source setup keeps credentials above the final save actions, and dialogs/mobile navigation support named controls and predictable keyboard focus. Local sessions recover after a server restart without automatically replaying ambiguous failed writes.
+
+See the [functionality and UI/UX review](docs/usability-review.md) for resolved findings, screenshots and remaining opportunities.
+
 ## What ships
 
 - Responsive dashboard, source filters/search, next-reset summary, light/dark system theme.
@@ -29,7 +43,7 @@ The server binds only to IPv4 loopback. Keep it local; it is not a hosted or mul
 - SQLite persistence, versioned schema, retention, local backup command, and single-instance protection.
 - Same-origin API, signed local sessions, CSRF checks, fixed provider destinations, and no application telemetry.
 
-Version 1.3 extends protected key entry to OpenAI API, Anthropic API, Cursor, GitHub Copilot, Mistral and DeepSeek API alongside OpenRouter. Reports require the provider-specific credentials below; other templates remain manual. Charts, CSV/JSON interchange, tray packaging and start-at-login remain follow-on work.
+Version 1.3 extends protected key entry to OpenAI API, Anthropic API, Cursor, GitHub Copilot, Mistral and DeepSeek API alongside OpenRouter. Reports require the provider-specific credentials below; other templates remain manual. Charts, CSV/JSON interchange and tray packaging remain follow-on work. Version 1.4 adds a local PWA, Windows launch controls and automatic Codex discovery.
 
 ## Automatic sources
 
@@ -37,7 +51,7 @@ Version 1.3 extends protected key entry to OpenAI API, Anthropic API, Cursor, Gi
 
 1. Install/sign in using the official Codex CLI with ChatGPT.
 2. Add **Codex**, choose **Automatic**, and save.
-3. If the CLI is not on PATH, set `CODEX_EXECUTABLE` in the server environment (or a local `.env`) to the native executable and restart.
+3. Quota automatically searches PATH and known native CLI/extension folders. Use **Detect Codex again** in source settings to check. For unusual installations, set `CODEX_EXECUTABLE` to an absolute native executable path and restart. Remove stale overrides to re-enable discovery.
 
 On Windows use the native **codex.exe**, not an npm `.cmd` wrapper. The VS Code extension can also contain a native executable, but its versioned installation path can change after an update.
 
@@ -88,7 +102,7 @@ Optional server-side environment variables:
 |---|---|
 | `PORT` | `4317`; integer 1024–65535 |
 | `AI_TRACKER_DATA_DIR` | Override the application data directory |
-| `CODEX_EXECUTABLE` | `codex` resolved from PATH; native executable only |
+| `CODEX_EXECUTABLE` | Optional absolute native executable override; otherwise automatically discovered |
 | `OPENROUTER_API_KEY` | Optional key for the OpenRouter collector |
 
 Editable source settings live in SQLite. Keys entered in the UI are encrypted with Windows DPAPI for the current user and stored outside SQLite. Environment mode remains available; `.env` is plaintext, not inherently safer. Use normal OS access controls and do not share credential files.
@@ -163,3 +177,7 @@ Read [how every tool is tracked and how credentials are protected](docs/how-it-w
 ## Reset alarms and email
 
 Click **Set alarm** beside any known reset time. Each window has its own alarm. Enable optional email after configuring the `QUOTA_SMTP_*` variables in `.env` and restarting. See [reset reminder setup and delivery behavior](docs/reset-reminders.md). Keep the server running for email; sound and desktop alerts also require the dashboard to remain open.
+
+## v1.6: less manual tracking
+
+Automatic setup now discovers configured provider environment variables by name, queues multi-tool refreshes, and adds a Claude Code subscription-window bridge. Compact view, saved sort preferences and `/` or `Ctrl+K` search reduce navigation time. See [automatic collection and setup](docs/dynamic-collection.md), including Claude Code requirements and account limitations.

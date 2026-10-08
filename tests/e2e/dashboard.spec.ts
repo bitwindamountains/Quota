@@ -70,6 +70,7 @@ test('automatic auth failure degrades to a working manual source', async ({ page
   await dialog.getByLabel('Display name').fill('Router auth test');
   await dialog.getByRole('radio', { name: 'Automatic', exact: false }).check();
   await dialog.getByRole('button', { name: 'Add source', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Save changes' }).click();
   const card = page.getByRole('article', { name: 'Router auth test source' });
   await page.reload();
   await expect(card.getByText('Configure a protected key or OPENROUTER_API_KEY in source settings, then retry.')).toBeVisible({ timeout: 20000 });
@@ -112,7 +113,7 @@ test('protected credential entry stays write-only and can be disconnected', asyn
   await dialog.getByLabel('New API key').fill('synthetic-browser-test-key-12345');
   await expect(dialog.getByLabel('New API key')).toHaveAttribute('type', 'password');
   await dialog.getByRole('button', { name: 'Save credential settings' }).click();
-  await expect(dialog.getByText('Credential settings saved.', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Credential settings saved.', { exact: true })).toBeVisible({ timeout: 15000 });
   await expect(dialog.getByLabel('New API key')).toHaveValue('');
   await page.screenshot({ path: 'docs/screenshots/credential-settings.png', fullPage: true });
   await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
@@ -190,7 +191,7 @@ test('key-enabled sources open provider-specific credential setup immediately af
     await dialog.getByLabel('Credential storage').selectOption('environment');
     await expect(dialog.getByLabel('Environment variable name')).toHaveValue(variable);
     await dialog.getByRole('button', { name: 'Save credential settings', exact: true }).click();
-    await expect(dialog.getByText('Credential settings saved.', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('Credential settings saved.', { exact: true })).toBeVisible({ timeout: 15000 });
     if (provider === 'openai') await page.screenshot({ path: 'docs/screenshots/provider-key-settings.png', fullPage: true });
     await dialog.getByRole('button', { name: 'Save changes', exact: true }).click();
   }

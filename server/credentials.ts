@@ -15,6 +15,10 @@ export const credentialInput = z.discriminatedUnion('method', [
 ]);
 type Configuration = { method: 'environment' | 'protected' | 'none'; variable?: string; reference?: string };
 
+export function availableEnvironments(provider: string, env: NodeJS.ProcessEnv = process.env) {
+  return Object.keys(env).filter(name => acceptsEnvironment(provider, name) && !!env[name]?.trim()).sort();
+}
+
 // Provider secrets must not be inherited by the CLI or the protection helper.
 export function childEnvironment() {
   const allowed = new Set(['systemroot', 'windir', 'path', 'pathext', 'temp', 'tmp', 'home', 'userprofile', 'localappdata', 'appdata', 'programfiles', 'programfiles(x86)', 'programdata', 'codex_home', 'xdg_config_home']);

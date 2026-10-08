@@ -59,3 +59,25 @@ Browser tests use a fresh isolated database; screenshots contain synthetic value
 - Full dependency audit reported zero known vulnerabilities. No dependencies or database migration were added (schema remains v3).
 - Local v1.3.0 state/health and homepage checks passed; HTTP 200, no-store response headers and the exclusive 127.0.0.1:4317 listener were verified. Online backups succeeded before and after restart.
 - No real provider credentials were used. These adapters require live verification with an eligible account and the documented permissions. No new SMTP delivery test was performed. See [provider scope and official evidence](integrations/key-providers.md).
+
+
+## Deployment recheck: 2026-09-19
+
+Build/typecheck, lint and full dependency audit passed (zero known vulnerabilities). Initial unit run: 67/68 passed, with a real DPAPI helper timeout while other checks ran concurrently. Complete standalone rerun: 68/68 passed. Full Chromium run: 6/7 passed; the protected credential success assertion exceeded five seconds. Its isolated rerun passed. Timing stability remains an open caveat; tests were not altered to hide these failures. No live provider or SMTP test, fresh dependency installation, or public deployment was performed. See [current deployment decision](deployment-readiness.md#current-deployment-decision) for public-hosting blockers.
+
+
+## v1.4 local PWA and discovery
+
+Build/typecheck and lint passed; 71 unit tests and nine Chromium browser tests passed. New tests cover native path override precedence, missing-path behavior, extension version discovery, incompatible executables, installability, icon responses, service-worker control, exact offline cache contents, offline API failure and recovery, and detection UI. Protected credential browser assertions now allow 15 seconds, exceeding the existing ten-second helper deadline. Real Codex version discovery succeeded without an override; launcher start/reuse/stop was checked with isolated data. Browser installation confirmation and actual Windows sign-in remain manual checks. No live provider usage requests or SMTP sends were made. See [local PWA setup](local-pwa.md).
+
+Final v1.4 smoke: online backup succeeded before startup; the Windows launcher started the real local server. State reports 1.4.0, manifest and service worker return HTTP 200 with no-store headers, and the listener is restricted to 127.0.0.1:4317. The full dependency audit reports zero known vulnerabilities. Start-at-login remains disabled by this implementation session.
+
+## v1.6 dynamic collection checks - 2026-09-26
+
+- Production build/typecheck and ESLint passed.
+- 80 Vitest tests passed, including queue draining/cancellation, environment-name disclosure boundaries, Claude snapshot validation/privacy/freshness and preservation of existing Claude settings.
+- 18 Chromium browser tests passed, including the environment quick-connect flow, keyboard navigation, remembered compact view, refresh queue feedback, PWA privacy and existing credential/reminder workflows. The first run passed 17/18: the authentication-failure test skipped the newly required final source save; after updating it to complete setup, the full suite passed.
+- Claude setup was exercised only against isolated temporary settings, never the user's real Claude configuration. No live Claude subscription, new live API-key calls or SMTP deliveries were tested. Reporting permissions and provider availability still require account-specific verification.
+- Local bridge readings are event-fed snapshots imported on the source's polling interval, not a continuous account-wide feed. Unchanged values conservatively retain their timestamp.
+
+Final compact-layout refinement passed production rebuild, lint and two targeted mobile/navigation browser checks. Visually inspected the 360px compact screenshot. Created a consistent local database backup, restarted the launcher-owned server, and verified v1.6.0 through the authenticated local state endpoint with a loopback-only listener. No Claude settings were installed on the user's account.

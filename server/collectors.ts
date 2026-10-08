@@ -1,3 +1,4 @@
+import { codexExecutable } from './codex-discovery.js';
 import { childEnvironment } from './credentials.js';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -8,6 +9,8 @@ import { metricSchema, type Metric, type Source } from '../shared/model.js';
 export class CollectionError extends Error {
   constructor(message: string, public pause = false, public retryAfter = 0) { super(message); }
 }
+// Expected absence of data (e.g. a tool not used yet): shown as a notice, without failure backoff.
+export class CollectionWaiting extends CollectionError {}
 export type Collected = { metrics: Metric[]; fingerprint?: string };
 export type Collector = (source: Source, signal: AbortSignal) => Promise<Collected>;
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -52,7 +55,9 @@ export function parseCodex(data: unknown, now = Date.now()): Metric[] {
 }
 
 export async function codexCollector(source: Source, signal: AbortSignal): Promise<Collected> {
-  const exe = process.env.CODEX_EXECUTABLE || 'codex';
+  let exe: string;
+  try { exe = (await codexExecutable()).path; }
+  catch (error) { throw new CollectionError((error as Error).message, true); }
   if (/\.(cmd|bat)$/i.test(exe)) throw new CollectionError('Point CODEX_EXECUTABLE to the native codex.exe, not a shell wrapper.', true);
   const child = spawn(exe, ['app-server', '-c', 'analytics.enabled=false', '-c', 'otel.exporter="none"', '-c', 'features.apps=false'],
     { stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true, env: childEnvironment(), cwd: process.env.TEMP || process.cwd() });
@@ -91,7 +96,7 @@ export async function codexCollector(source: Source, signal: AbortSignal): Promi
     child.stdin.write(JSON.stringify({ id, method, params }) + '\n');
   });
   try {
-    await rpc('initialize', { clientInfo: { name: 'ai_usage_tracker', title: 'Quota', version: '1.3.0' } });
+    await rpc('initialize', { clientInfo: { name: 'ai_usage_tracker', title: 'Quota', version: '1.5.0' } });
     child.stdin.write(JSON.stringify({ method: 'initialized', params: {} }) + '\n');
     const accountResponse = z.object({ account: z.object({ type: z.string(), email: z.string().nullable().optional() }).nullable() }).parse(await rpc('account/read', { refreshToken: false }));
     if (accountResponse.account?.type !== 'chatgpt') throw new CollectionError('Sign in to Codex with ChatGPT in the official CLI, then retry. API-key mode has no subscription windows.', true);

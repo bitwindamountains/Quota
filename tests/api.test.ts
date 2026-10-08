@@ -13,6 +13,25 @@ async function setup() {
 }
 afterEach(async () => { for (const { app, store } of resources) { await app.close(); store.close(); } resources.length = 0; });
 describe('local API security and mutations', () => {
+  it('discovers only provider-allowlisted nonempty environment names, never values', async () => {
+    const { app, headers } = await setup();
+    process.env.QUOTA_DEEPSEEK_DISCOVERY_TEST = 'discovery-secret-canary';
+    process.env.QUOTA_OPENAI_DISCOVERY_EMPTY = ' ';
+    process.env.UNRELATED_DISCOVERY_TEST = 'unrelated-secret';
+    try {
+      const response = await app.inject({ url: '/api/connections', headers });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().deepseek).toContain('QUOTA_DEEPSEEK_DISCOVERY_TEST');
+      expect(response.body).not.toContain('discovery-secret-canary');
+      expect(response.body).not.toContain('QUOTA_OPENAI_DISCOVERY_EMPTY');
+      expect(response.body).not.toContain('UNRELATED_DISCOVERY_TEST');
+      expect((await app.inject({ url: '/api/connections', headers: { host: headers.host, 'x-quota-client': '1' } })).statusCode).toBe(401);
+    } finally {
+      delete process.env.QUOTA_DEEPSEEK_DISCOVERY_TEST;
+      delete process.env.QUOTA_OPENAI_DISCOVERY_EMPTY;
+      delete process.env.UNRELATED_DISCOVERY_TEST;
+    }
+  });
   it('blocks DNS-rebinding hosts, cross-site origins, simple requests, and absent sessions', async () => {
     const { app, headers } = await setup();
     expect((await app.inject({ url: '/api/state', headers: { ...headers, host: 'attacker.example:4317' } })).statusCode).toBe(403);

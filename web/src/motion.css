@@ -1,0 +1,148 @@
+/* Motion layer. All animation is decorative; style.css disables it for prefers-reduced-motion. */
+:root {
+  --ease-out: cubic-bezier(.2, .8, .2, 1);
+  --tone-healthy: var(--healthy); --tone-caution: #d99a3d; --tone-critical: #d4606d;
+  --aurora-opacity: .34; --primary-bg: var(--purple);
+}
+@media (prefers-color-scheme: dark) { :root { --primary-bg: #6754c4; --aurora-opacity: .22; --tone-caution: #e3ad5c; --tone-critical: #e47f8a; } }
+
+/* Ambient background: palette follows the tightest limit (calm → warm → hot). */
+.aurora { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.aurora i { position: absolute; width: 58vmax; height: 58vmax; border-radius: 50%; filter: blur(80px); opacity: var(--aurora-opacity);
+  transition: background-color 2.5s ease; animation: drift 32s ease-in-out infinite alternate; }
+.aurora i:nth-child(1) { top: -22vmax; left: 8vw; background-color: var(--a1); }
+.aurora i:nth-child(2) { top: 18vh; right: -24vmax; background-color: var(--a2); animation-duration: 38s; animation-delay: -9s; }
+.aurora i:nth-child(3) { bottom: -30vmax; left: 30vw; background-color: var(--a3); animation-duration: 44s; animation-delay: -17s; }
+.aurora.calm { --a1: #8b7cf6; --a2: #6aa8ff; --a3: #5fd4c0; }
+.aurora.warm { --a1: #a78bfa; --a2: #f5b454; --a3: #f59e9e; }
+.aurora.hot  { --a1: #f87171; --a2: #fb923c; --a3: #e879f9; }
+@keyframes drift {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6vw, 5vh) scale(1.12); }
+  100% { transform: translate(-5vw, -4vh) scale(.94); }
+}
+.main-shell { position: relative; z-index: 1; }
+
+/* Summary strip: frosted glass over the aurora. */
+.summary-strip { background: color-mix(in srgb, var(--surface) 80%, transparent); backdrop-filter: blur(16px) saturate(1.3); }
+.summary-item.tightest { display: flex; align-items: center; gap: 16px; }
+.summary-item.tightest .summary-value > span { width: 100%; }
+.summary-value > .ticker { font: inherit; color: inherit; width: auto; line-height: inherit; letter-spacing: inherit; display: inline-block; animation: tick .35s var(--ease-out); }
+@keyframes tick { from { opacity: .35; transform: translateY(-5px); } }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tone-critical); margin-left: 4px; animation: live 1.8s ease-out infinite; }
+@keyframes live { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tone-critical) 60%, transparent); } 100% { box-shadow: 0 0 0 9px transparent; } }
+
+/* Ring gauges. */
+.ring { position: relative; display: inline-grid; place-items: center; flex-shrink: 0; color: var(--tone-healthy); }
+.ring.caution { color: var(--tone-caution); } .ring.critical { color: var(--tone-critical); }
+.ring svg { position: absolute; inset: 0; transform: rotate(-90deg); overflow: visible; }
+.ring-track { fill: none; stroke: color-mix(in srgb, currentColor 16%, transparent); }
+.ring-fill { fill: none; stroke: currentColor; stroke-linecap: round; transition: stroke-dashoffset 1.2s var(--ease-out); filter: drop-shadow(0 0 3px color-mix(in srgb, currentColor 45%, transparent)); }
+.ring-content { position: relative; display: grid; place-items: center; }
+.ring .tool-logo { width: 38px; height: 38px; border-radius: 50%; }
+.compact .ring .tool-logo { width: 34px; height: 34px; }
+
+/* Cards: staggered entrance, tilt, cursor spotlight, tone glow. */
+.source-card { position: relative; isolation: isolate;
+  transform: perspective(900px) rotateX(var(--ry, 0deg)) rotateY(var(--rx, 0deg));
+  transition: transform .3s var(--ease-out), border-color .25s, box-shadow .35s;
+  animation: card-in .65s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 60ms); }
+@keyframes card-in { from { opacity: 0; transform: translateY(18px) scale(.97); } }
+.source-card > * { position: relative; z-index: 1; }
+.source-card::before { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity .35s;
+  background: radial-gradient(440px circle at var(--mx, 50%) var(--my, 0%), color-mix(in srgb, var(--tool-color) 13%, transparent), transparent 62%); }
+.source-card:hover::before { opacity: 1; }
+.source-card:hover { box-shadow: 0 18px 44px -18px color-mix(in srgb, var(--tool-color) 45%, transparent); border-color: color-mix(in srgb, var(--tool-color) 30%, var(--line)); }
+.source-card.tone-caution { border-color: color-mix(in srgb, var(--tone-caution) 40%, var(--line)); }
+.source-card.tone-critical { border-color: color-mix(in srgb, var(--tone-critical) 55%, var(--line)); animation: card-in .65s var(--ease-out) backwards, breathe 3.4s ease-in-out 1s infinite; animation-delay: calc(var(--i, 0) * 60ms), 1s; }
+@keyframes breathe { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--tone-critical) 14%, transparent), 0 14px 38px -16px var(--tone-critical); } }
+
+/* New data arrived: a ring of light expands from the card. */
+.source-card.fresh-data { animation: data-pulse 1.4s var(--ease-out); }
+@keyframes data-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--tool-color) 55%, transparent); }
+  100% { box-shadow: 0 0 0 16px transparent; }
+}
+
+/* Checking: a sheen sweeps across the card. */
+.source-card[aria-busy=true]::after { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, color-mix(in srgb, var(--tool-color) 14%, transparent) 50%, transparent 65%);
+  background-size: 260% 100%; animation: sheen 1.5s linear infinite; }
+@keyframes sheen { from { background-position: 130% 0; } to { background-position: -130% 0; } }
+
+/* Bars fill in after the card lands. */
+.progress > span { transform-origin: left center; animation: bar-in 1.2s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 60ms + .2s); }
+@keyframes bar-in { from { transform: scaleX(0); } }
+
+/* A window just reset: brief sparkle. */
+.metric.celebrate { position: relative; }
+.metric.celebrate::after { content: '✦  ✧  ✦'; position: absolute; right: 4px; top: 10px; color: var(--purple); font-size: 14px; letter-spacing: 2px; pointer-events: none; animation: sparkle 2.6s var(--ease-out) forwards; }
+@keyframes sparkle { 0% { opacity: 0; transform: translateY(6px) scale(.6); } 20% { opacity: 1; transform: translateY(0) scale(1.1); } 100% { opacity: 0; transform: translateY(-18px) scale(.9); } }
+
+/* Quieter cards: per-metric alarm buttons appear on hover or keyboard focus (always shown on touch). */
+@media (hover: hover) and (pointer: fine) {
+  .source-card .alarm-button:not(.active) { opacity: 0; transition: opacity .2s; }
+  .source-card:hover .alarm-button:not(.active), .source-card:focus-within .alarm-button:not(.active) { opacity: 1; }
+  .source-card:hover .alarm-button:disabled { opacity: .4; }
+}
+
+/* Primary actions and small delights. */
+.button.primary { background-color: var(--primary-bg); background-image: linear-gradient(135deg, var(--primary-bg), color-mix(in srgb, var(--primary-bg) 85%, #8e3fd0)); transition: transform .2s var(--ease-out), box-shadow .25s, filter .2s; }
+.button.primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 24px -10px var(--primary-bg); filter: brightness(1.05); }
+.button.primary:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.brand-mark { animation: glow 5s ease-in-out infinite; }
+@keyframes glow { 50% { box-shadow: 0 4px 22px color-mix(in srgb, var(--purple) 55%, transparent); } }
+.add-card { background: color-mix(in srgb, var(--surface) 55%, transparent); backdrop-filter: blur(8px); transition: border-color .25s, background .25s, transform .3s var(--ease-out); }
+.add-card:hover { transform: translateY(-2px); }
+.add-card > span { transition: transform .45s var(--ease-out); }
+.add-card:hover > span { transform: rotate(90deg) scale(1.08); }
+.filter { transition: color .2s, background .2s, border-color .2s; }
+
+/* Dialogs and notifications ease in. */
+.modal[open] { animation: modal-in .32s var(--ease-out); }
+.modal[open]::backdrop { animation: fade-in .3s ease; }
+@keyframes modal-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+@keyframes fade-in { from { opacity: 0; } }
+.toast { animation: toast-in .35s var(--ease-out); }
+@keyframes toast-in { from { opacity: 0; translate: 0 14px; } }
+
+/* View transitions for filter, sort and density changes. */
+::view-transition-group(*) { animation-duration: .45s; animation-timing-function: var(--ease-out); }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .25s; }
+
+/* Scan and record dialogs. */
+.section-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.scan-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; margin-bottom: 25px; border-radius: 10px; font-size: 13px; line-height: 1.5; color: var(--subtle);
+  border: 1px solid color-mix(in srgb, var(--purple) 30%, var(--line)); background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(14px); animation: toast-in .45s var(--ease-out); }
+.scan-banner > svg { color: var(--purple); flex-shrink: 0; animation: radar 2.4s ease-in-out infinite; }
+.scan-banner > span { flex: 1; min-width: 200px; }
+.scan-banner strong { color: var(--text); }
+@keyframes radar { 50% { transform: rotate(18deg) scale(1.1); } }
+.scan-radar { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 28px 0; color: var(--muted); font-size: 13px; }
+.scan-radar svg { color: var(--purple); animation: spin 2.2s linear infinite; }
+.scan-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.scan-item { border: 1px solid var(--line); border-radius: 9px; transition: border-color .25s, background .25s; animation: card-in .45s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 50ms); }
+.scan-item > label { display: flex !important; flex-direction: row !important; align-items: center; gap: 12px !important; padding: 11px 13px; cursor: pointer; }
+.scan-item input { accent-color: var(--purple); width: 17px; height: 17px; }
+.scan-item.added { border-color: color-mix(in srgb, var(--positive) 45%, var(--line)); background: color-mix(in srgb, var(--positive) 7%, var(--surface)); }
+.scan-item.failed { border-color: #d4606d; }
+.scan-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.scan-text strong { font-size: 14px; color: var(--text); }
+.scan-error { color: #b64249 !important; }
+.scan-state { width: 18px; color: var(--positive); display: grid; place-items: center; }
+.record-link { align-self: flex-start; }
+.record-row { border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px 14px; margin: 0; display: flex; flex-direction: column; gap: 12px; }
+.record-row legend { font-size: 14px; font-weight: 600; color: var(--text); padding: 0 4px; }
+.record-slider { display: flex; align-items: flex-end; gap: 14px; }
+.record-slider > input[type=range] { flex: 1; margin-bottom: 14px; accent-color: var(--purple); }
+.record-slider > label { flex: 0 0 110px !important; }
+.catchup-banner { border-color: color-mix(in srgb, var(--tone-caution) 45%, var(--line)); }
+.catchup-banner > svg { color: var(--tone-caution); animation: none; }
+.paste-box { gap: 8px !important; }
+.paste-box > span { display: flex; align-items: center; gap: 7px; }
+.paste-box textarea { font: inherit; font-size: 13px; resize: vertical; min-height: 64px; padding: 10px 11px; border-radius: 8px; color: var(--text);
+  border: 1px dashed var(--control-border); background: color-mix(in srgb, var(--purple-soft) 45%, var(--surface)); transition: border-color .2s, background .2s; }
+.paste-box textarea:focus { border-style: solid; border-color: var(--purple); background: var(--surface); }
+.record-row.added { border-color: color-mix(in srgb, var(--purple) 35%, var(--line)); animation: card-in .4s var(--ease-out); }
+.record-row legend .mini-tag { margin-left: 8px; }
+.danger-text { color: #b64249; align-self: flex-start; }

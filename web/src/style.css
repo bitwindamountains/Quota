@@ -24,3 +24,5 @@ body{background:var(--canvas);color:var(--text)}
 .reminder-event { display: grid; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .reminder-event p { margin: 0; }
 @media (max-width: 600px) { .reminder-banner { flex-wrap: wrap; } .topbar-right .private-pill { display: none; } }
+
+.pwa-controls{position:relative}.pwa-help{position:absolute;z-index:30;right:0;top:35px;width:250px;max-width:80vw;background:var(--surface);color:var(--text);border:1px solid var(--line);padding:16px;border-radius:10px;box-shadow:var(--shadow);font-size:12px;line-height:1.6}@media(max-width:640px){.topbar-right{gap:10px}.topbar-right .private-pill,.topbar-right .profile{display:none}}

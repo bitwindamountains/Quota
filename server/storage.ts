@@ -177,7 +177,11 @@ export class Store {
     this.db.transaction(() => {
       const source = this.get(id);
       if (source.revision !== revision) throw new AppError(409, 'This source changed. Close and reopen the editor.');
-      if (source.mode !== 'manual') throw new AppError(400, 'Switch to manual mode before entering values.');
+      // Automatic sources accept a user reading for the windows they already report; the newest observation wins.
+      if (source.mode !== 'manual') {
+        const keys = new Set(source.metrics.map(m => m.key));
+        if (!keys.size || metrics.length !== keys.size || metrics.some(m => !keys.has(m.key))) throw new AppError(400, 'Automatic sources accept readings only for the windows they already report.');
+      }
       for (const metric of metrics) {
         if (metric.provenance !== 'user_entered' && JSON.stringify(source.metrics.find(m => m.key === metric.key)) !== JSON.stringify(metric))
           throw new AppError(400, 'New or changed manual readings must be labeled user-entered.');
@@ -192,6 +196,13 @@ export class Store {
     this.db.transaction(() => {
       this.db.prepare("UPDATE runs SET finished_at=?,outcome='error',error=? WHERE id=?").run(new Date().toISOString(), error, runId);
       this.db.prepare('UPDATE sources SET error=?,failures=failures+1,next_attempt=?,auth_paused=? WHERE id=? AND revision=?').run(error, next, Number(pause), source.id, source.revision);
+    })();
+  }
+  // Records an expected wait: keeps readings, clears backoff, and checks again at the normal interval.
+  wait(source: Source, runId: string, notice: string, next: number) {
+    this.db.transaction(() => {
+      this.db.prepare("UPDATE runs SET finished_at=?,outcome='waiting',error=? WHERE id=?").run(new Date().toISOString(), notice, runId);
+      this.db.prepare('UPDATE sources SET error=?,failures=0,next_attempt=?,auth_paused=0 WHERE id=? AND revision=?').run(notice, next, source.id, source.revision);
     })();
   }
   permitRetry(id: string) { this.db.prepare('UPDATE sources SET auth_paused=0 WHERE id=?').run(id); }
